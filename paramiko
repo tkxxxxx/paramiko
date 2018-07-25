@@ -1,20 +1,27 @@
-# sshリモートログイン
-
 # -*- coding: utf-8 -*-
-#!/usr/bin/env python
-
+import sys
+import psycopg2
 import paramiko
+import time
 
-hostname = '10.40.137.61'
-port = 22
-username = 'root'
-password = 'Defaultp@ss1'
 
-if __name__ == "__main__":
-    paramiko.util.log_to_file('paramiko.log')
-    s = paramiko.SSHClient()
-    s.load_system_host_keys()
-    s.connect(hostname, port, username, password)
-    stdin, stdout, stderr = s.exec_command('ifconfig')
-    print stdout.read()
-    s.close()
+# ssh clientオブジェクト(ssh)を作る・・・
+ssh = paramiko.SSHClient()
+
+# どうやってhostname & keyを登録するのかわからないので、AutoAddPolicy()としておく
+ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+# ssh接続する
+ssh.connect(hostname='xxxxxxxxx', port=22, username='root', password='xxxxxxxx')
+
+# ls を実行する
+stdin, stdout, stderr = ssh.exec_command('ls')
+
+#print stdout.channel.recv_exit_status()   成功ならstatus is 0
+stdin.flush() 
+
+# 実行結果のstdoutとstderrを読み出す
+for o in stdout:
+    print(o.rstrip())
+#for e in stderr:
+#    print(e)
