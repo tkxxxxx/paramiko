@@ -1,0 +1,91 @@
+# -*- coding: utf-8 -*-
+import paramiko
+import sys
+import traceback
+import datetime
+import os
+
+
+def print_usage():
+  """ Print usage. """
+  print("[Usage]", "python", sys.argv[0], "<target_ips.txt>")
+
+
+if __name__ == '__main__':
+  if len(sys.argv) != 2:
+    print_usage()
+    sys.exit()
+
+  file_name = sys.argv[1]
+
+  # 結果格納dirの準備
+  now = datetime.datetime.now()
+  current_dir = os.path.dirname(os.path.abspath(__file__))
+  result_file_path = os.path.join(current_dir, "results", now.strftime("%Y%m%d_%H%M%S.csv"))
+  print("Result:", result_file_path)
+
+  for ip_address in open(file_name, 'r'):
+    # 対象情報
+    host = ip_address.strip()
+    user = 'siadmin'
+    password = '!!!PASSWORD'
+    private_key = '/root/.ssh/id_dsa.SBIS-Infra'
+
+    # ssh準備
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+    try:
+      result = host
+      # 接続開始
+      ssh.connect(host, username=user, password=password, key_filename=private_key, timeout=10)
+      # ssh.connect(host, username="root", password="password", timeout=10)
+
+      # 事前チェック
+      stdin, stdout, stderr = ssh.exec_command('grep -E "^nameserver\s12.234.5.67$" /etc/resolv.conf')
+
+      r = ""
+      for line in stdout:
+        r = r + line
+
+      if len(r.strip()) <= 0:
+        # 既にコメントアウトすべき行が存在しなければ該当マシンはスキップ
+        result = result + ",No need changing"
+        continue
+      else:
+        # コメントアウトすべき行が素材する場合の処理
+        result = result + ",Executed sed command"
+
+        now = datetime.datetime.now()
+        backup_dir = "/tmp/" + now.strftime("kiban_%Y%m%d_%H%M%S")
+
+        stdin, stdout, stderr = ssh.exec_command('sudo mkdir ' + backup_dir)
+
+        err = ""
+        for line in stderr:
+          err = err + line
+
+        stdin, stdout, stderr = ssh.exec_command('sudo cp -p /etc/resolv.conf ' + backup_dir)
+        err = ""
+        for line in stderr:
+          err = err + line
+
+        stdin, stdout, stderr = ssh.exec_command("sudo sed -i -e 's/^nameserver\s12.234.5.67$/#&/g' /etc/resolv.conf")
+        err = ""
+        for line in stderr:
+          err = err + line
+        result = result + "," + err
+
+    except Exception as e:
+      print(traceback.format_exc())
+      result = result + "," + str(e)
+
+    finally:
+      ssh.close()
+      
+      # 結果出力のための.csvファイルに1行結果を記載
+      with open(result_file_path, "a") as file:
+        file.write(result + "\n")
+
+      # 同様の内容を標準出力にも出す
+      print(result)
